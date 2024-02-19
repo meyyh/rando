@@ -4,6 +4,8 @@
 #include <chrono>//time in
 #include <thread>// ms
 
+#include <syslog.h> //log to journal
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,10 +17,11 @@
 
 //g++ -g keypaste.cpp -o kppp -Wall -Wextra -Wpedantic -Werror
 
+std::string dpserver;
 
 // based on the layout of the hp elitebook 840 G5
 const char *keys[] = {
-    "KEY_ESC", "KEY_DELETE",
+    "KEY_ESC", "KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4","KEY_F5","KEY_F6","KEY_F7","KEY_F8","KEY_F9","KEY_F10","KEY_F11","KEY_F12", "KEY_DELETE",
     "KEY_GRAVE", "KEY_1", "KEY_2", "KEY_3", "KEY_4", "KEY_5", "KEY_6", "KEY_7", "KEY_8", "KEY_9", "KEY_0", "KEY_MINUS", "KEY_EQUAL","KEY_BACKSPACE", "KEY_HOME",
     "KEY_TAB", "KEY_Q", "KEY_W", "KEY_E", "KEY_R", "KEY_T", "KEY_Y", "KEY_U", "KEY_I", "KEY_O", "KEY_P", "KEY_LEFTBRACE", "KEY_RIGHTBRACE", "KEY_BACKSLASH", "KEY_PAGEUP",
     "KEY_CAPSLOCK", "KEY_A", "KEY_S", "KEY_D", "KEY_F", "KEY_G", "KEY_H", "KEY_J", "KEY_K", "KEY_L", "KEY_SEMICOLON", "KEY_APOSTROPHE", "KEY_ENTER", "KEY_PAGEDOWN",
@@ -27,8 +30,8 @@ const char *keys[] = {
     
     "KEY_PLAYPAUSE", "KEY_VOLUMEUP", "KEY_VOLUMEDOWN", "KEY_MUTE", "KEY_NEXTSONG", "KEY_PREVIOUSSONG",
     "KEY_UNDO", "KEY_SCROLLLOCK", "KEY_INSERT", "KEY_EJECTCD", "KEY_FORWARD", "KEY_BACK",
-    "KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4","KEY_F5","KEY_F6","KEY_F7","KEY_F8","KEY_F9","KEY_F10","KEY_F11","KEY_F12", "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16","KEY_F17","KEY_F18","KEY_F19","KEY_F20","KEY_F21","KEY_F22","KEY_F23","KEY_F24"
-};
+    "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16","KEY_F17","KEY_F18","KEY_F19","KEY_F20","KEY_F21","KEY_F22","KEY_F23","KEY_F24"
+};//bottom 3 rows are just extras
 
 //https://github.com/malteskoruppa/linuxkb
 // convert ASCII chars to key codes
@@ -106,7 +109,6 @@ short char_to_keycode(char c) {
 
   case ',': keycode = KEY_COMMA; break;
 
-  // special chars on Android keyboard, page 2
   case '~': keycode = KEY_GRAVE; break; // with SHIFT, dead key
   case '`': keycode = KEY_GRAVE; break; // dead key
   case '|': keycode = KEY_BACKSLASH; break; // with SHIFT
@@ -153,57 +155,84 @@ void emit(int fd, int type, int code, int val)
    write(fd, &ie, sizeof(ie));
 }
 
+std::string dopopen(std::string command)
+{
+    std::array<char, 2048> buffer;
+
+    FILE *pipe = popen(command.c_str(), "r");
+    if (!pipe)
+    {
+        std::cerr << "popen error with " << command << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    fgets(buffer.data(), buffer.size(), pipe);
+    if (ferror(pipe))
+    {
+        std::cerr << "Error reading from pipe in dopopen." << std::endl;
+        pclose(pipe); 
+        exit(EXIT_FAILURE);
+    }
+
+    // Remove newline fgets adds
+    buffer[strcspn(buffer.data(), "\r\n")] = 0;
+
+    pclose(pipe);
+
+    return std::string(buffer.data());
+}
+
+
 int main(void)
 {
-    //currently make a new one every time dont care ot fix
-   struct uinput_setup usetup;
+    //get display server
+    std::string dpserver = dopopen("echo $XDG_SESSION_TYPE");
 
-   int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    struct uinput_setup usetup;
 
-   ioctl(fd, UI_SET_EVBIT, EV_KEY);
+    int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+
+    ioctl(fd, UI_SET_EVBIT, EV_KEY);
    
-   //loop through the keys we want to use idk this is required
-   for (int i = 0; i < numKeys; ++i) {
+    //loop through the keys we want to use idk why it does not work without this
+    for (int i = 0; i < numKeys; ++i) {
         int code = KEY_ESC + i;
         ioctl(fd, UI_SET_KEYBIT, code);
     }
 
-   memset(&usetup, 0, sizeof(usetup));
-   strcpy(usetup.name, "key paste");
-   usetup.id.bustype = BUS_USB;
-   usetup.id.vendor = 0x69;
-   usetup.id.product = 0x420;
+    memset(&usetup, 0, sizeof(usetup));
+    strcpy(usetup.name, "key paste");
+    usetup.id.bustype = BUS_USB;
+    usetup.id.vendor = 0x69;
+    usetup.id.product = 0x420;
    
 
-   ioctl(fd, UI_DEV_SETUP, &usetup);
-   ioctl(fd, UI_DEV_CREATE);
+    ioctl(fd, UI_DEV_SETUP, &usetup);
+    ioctl(fd, UI_DEV_CREATE);
 
-   sleep(1);
+    sleep(1);
 
-    std::string command("wl-paste");
-    std::array<char, 2048> buffer;
+
+    std::string errstr = "command not found";
     std::string cbdata;
-    FILE *pipe = popen(command.c_str(), "r");
-    if (!pipe)
-    {
-        std::cerr << "Couldn't start command." << std::endl;
-        return 0;
+    if (dpserver == "wayland"){
+        cbdata += dopopen("wl-paste");
+        if (cbdata.find(errstr) != std::string::npos){
+            std::cerr << "wl-paste not found" << std::endl;
+            syslog(LOG_INFO, "%s", "wl-paste not found");
+        }
+    }// checks if xclip works then xsel
+    else if (dpserver == "x11"){
+        cbdata += dopopen("xclip -selection clipboard -o");
+        if (cbdata.find(errstr) != std::string::npos){
+            syslog(LOG_INFO, "%s", "xclip not found");
+            cbdata += dopopen("xsel --clipboard");
+            if (cbdata.find(errstr) != std::string::npos){
+                syslog(LOG_INFO, "%s", "xsel not found");
+                std::cerr << "xsel and xclip not found" << std::endl;
+            }
+        }
     }
-    while (fgets(buffer.data(), buffer.size(), pipe) != NULL) {
-        if (ferror(pipe)) {
-        std::cerr << "Error reading from pipe." << std::endl;
-        break;
-    }
-        cbdata += buffer.data();
-    }
-    pclose(pipe);
-
-    std::string cama;
-    cama += ",";
-    int testcode = char_to_keycode(cama[0]);
-    std::cout << "testcode: " << testcode << "\n";
-    std::cout << "cama: " << "," << "\n";
-    
 
     for (size_t i = 0; i < cbdata.length() - 1; i++) {
 
@@ -213,8 +242,8 @@ int main(void)
         if (shift_chars.find(cbdata[i]) != std::string::npos) {
             //if not lowercase
 
-            std::cout << "char not lower: " << cbdata[i] << "\n";
-            std::cout << "keycode not lower: " << code << "\n";
+            //std::cout << "char not lower: " << cbdata[i] << "\n";
+            //std::cout << "keycode not lower: " << code << "\n";
             //press
             emit(fd, EV_KEY, KEY_LEFTSHIFT, 1);
             emit(fd, EV_SYN, SYN_REPORT, 0);
@@ -232,8 +261,8 @@ int main(void)
         } else {
             //if lowercase
             
-            std::cout << "char lower: " << cbdata[i] << "\n";
-            std::cout << "keycode lower: " << code << "\n";
+            //std::cout << "char lower: " << cbdata[i] << "\n";
+            //std::cout << "keycode lower: " << code << "\n";
             //press
             emit(fd, EV_KEY, code, 1);
             emit(fd, EV_SYN, SYN_REPORT, 0);
@@ -244,11 +273,10 @@ int main(void)
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
     }
-   sleep(1);
+    sleep(1);
 
-   ioctl(fd, UI_DEV_DESTROY);
-   close(fd);
+    ioctl(fd, UI_DEV_DESTROY);
+    close(fd);
    
-
-   return 0;
+    return 0;
 }
