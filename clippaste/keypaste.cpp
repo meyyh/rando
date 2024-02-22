@@ -234,14 +234,16 @@ int main(void)
         }
     }// checks if xclip works then xsel
     else if (dpserver == "x11"){
-    cbdata += dopopen("xclip -o");
+        cbdata += dopopen("xclip -o");
     
-    if (cbdata.find(errstr) != std::string::npos) {
-        // Log the error to journalctl
-        syslog(LOG_INFO, "%s", "xclip not found or error");
-        std::cerr << "xclip not found or error" << std::endl;  
+        if (cbdata.find(errstr) != std::string::npos) {
+            // Log the error to journalctl
+            syslog(LOG_INFO, "%s", "xclip not found or error");
+            std::cerr << "xclip not found or error" << std::endl;  
+        }
+    } else {
+        std::cout << "unknow dpserver: " << dpserver << "\n";
     }
-}
 
     for (size_t i = 0; i < cbdata.length(); i++) {
 
