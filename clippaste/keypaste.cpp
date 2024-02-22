@@ -239,7 +239,7 @@ int main(void)
     printInts(dpserver);
 
     // Remove trailing newline characters
-    std::regex newlines_re("\n+");
+    std::regex newlines_re("[\n\r]+");
 
     auto result = std::regex_replace(dpserver, newlines_re, "");
 
