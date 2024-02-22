@@ -247,20 +247,19 @@ int main(void)
     std::string cbdata;
     if (dpserver == wayland){
         cbdata += dopopen("wl-paste");
-        std::cout << "wayland";
+
         if (cbdata.find(errstr) != std::string::npos){
             std::cerr << "wl-paste not found" << std::endl;
         }
     }
     else if (dpserver == x11){
         cbdata += dopopen("xclip -o");
-        std::cout << "x11" << "\n";
-        std::cout << cbdata << "\n";
-        if (cbdata.find(errstr) != std::string::npos) {
 
+        if (cbdata.find(errstr) != std::string::npos) {
             std::cerr << "xclip not found or error" << std::endl;  
         }
-    } else {
+    }
+    else {
         std::cout << "unknow dpserver: " << dpserver << "\n";
     }
 
@@ -289,8 +288,6 @@ int main(void)
         } else {
             //if lowercase
             
-            //std::cout << "char lower: " << cbdata[i] << "\n";
-            //std::cout << "keycode lower: " << code << "\n";
             //press
             emit(fd, EV_KEY, code, 1);
             emit(fd, EV_SYN, SYN_REPORT, 0);
