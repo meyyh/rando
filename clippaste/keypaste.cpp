@@ -193,14 +193,6 @@ std::string dopopen(std::string command)
     }
 }
 
-void printInts(const std::string& str) {
-    for (char c : str) {
-        std::cout << static_cast<int>(c) << " ";
-    }
-    std::cout << std::endl;
-}
-
-
 int main(void)
 {
     //get display server
@@ -235,13 +227,7 @@ int main(void)
     std::string x11 = "x11";
 
     // Remove trailing newline characters
-    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'), dpserver.cend());
-
-    printInts(wayland);
-    printInts(x11);
-    printInts(dpserver);
-
-    
+    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'), dpserver.cend());  
 
     std::string errstr = "command not found";
     std::string cbdata;
