@@ -254,7 +254,8 @@ int main(void)
     }
     else if (dpserver == x11){
         cbdata += dopopen("xclip -o");
-        std::cout << "x11";
+        std::cout << "x11" << "\n";
+        std::cout << cbdata << "\n";
         if (cbdata.find(errstr) != std::string::npos) {
 
             std::cerr << "xclip not found or error" << std::endl;  
