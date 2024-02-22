@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include <regex>
 
 #include <linux/input.h>
 #include <linux/uinput.h>
@@ -228,7 +229,9 @@ int main(void)
     std::string x11 = "x11";
 
     // Remove trailing newline characters
-    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'),dpserver.end());
+    std::regex newlines_re("\n+");
+
+    auto result = std::regex_replace(dpserver, newlines_re, "");
 
     std::string errstr = "command not found";
     std::string cbdata;
