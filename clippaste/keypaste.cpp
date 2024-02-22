@@ -158,6 +158,7 @@ void emit(int fd, int type, int code, int val)
 std::string dopopen(std::string command)
 {
     std::array<char, 2048> buffer;
+    std::string result;
 
     FILE *pipe = popen(command.c_str(), "r");
     if (!pipe)
@@ -166,21 +167,31 @@ std::string dopopen(std::string command)
         exit(EXIT_FAILURE);
     }
 
-    fgets(buffer.data(), buffer.size(), pipe);
+    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+    {
+        result += buffer.data();
+    }
+
     if (ferror(pipe))
     {
         std::cerr << "Error reading from pipe in dopopen." << std::endl;
-        pclose(pipe); 
+        pclose(pipe);
         exit(EXIT_FAILURE);
     }
 
-    // Remove newline fgets adds
-    buffer[strcspn(buffer.data(), "\r\n")] = 0;
+    int status = pclose(pipe);
 
-    pclose(pipe);
-
-    return std::string(buffer.data());
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+    {
+        return result;
+    }
+    else
+    {
+        std::cerr << "Command execution failed with exit status: " << WEXITSTATUS(status) << std::endl;
+        exit(EXIT_FAILURE);
+    }
 }
+
 
 
 int main(void)
