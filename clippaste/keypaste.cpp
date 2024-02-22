@@ -233,25 +233,13 @@ int main(void)
             syslog(LOG_INFO, "%s", "wl-paste not found");
         }
     }// checks if xclip works then xsel
-    else if (dpserver == "x11")
-    {
-    cbdata += dopopen("xclip -selection clipboard -o");
+    else if (dpserver == "x11"){
+    cbdata += dopopen("xclip -o");
     
     if (cbdata.find(errstr) != std::string::npos) {
-        syslog(LOG_INFO, "%s", "xclip not found or error");
-        
         // Log the error to journalctl
-        std::cerr << "xclip not found or error" << std::endl;
-        
-        // Try xsel if xclip fails
-        cbdata += dopopen("xsel --clipboard");
-        
-        if (cbdata.find(errstr) != std::string::npos) {
-            syslog(LOG_INFO, "%s", "xsel not found or error");
-            
-            // Log the error to journalctl
-            std::cerr << "xsel not found or error" << std::endl;
-        }
+        syslog(LOG_INFO, "%s", "xclip not found or error");
+        std::cerr << "xclip not found or error" << std::endl;  
     }
 }
 
