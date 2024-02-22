@@ -235,9 +235,7 @@ int main(void)
     std::string x11 = "x11";
 
     // Remove trailing newline characters
-    std::regex newlines_re("[\n\r]+");
-
-    auto result = std::regex_replace(dpserver, newlines_re, "");
+    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'), dpserver.cend());
 
     printInts(wayland);
     printInts(x11);
