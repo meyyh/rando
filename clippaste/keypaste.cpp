@@ -224,19 +224,22 @@ int main(void)
     sleep(1);
 
     //for issues with string and char
-    const char* wayland = "wayland";
-    const char* x11 = "x11";
+    std::string wayland = "wayland";
+    std::string x11 = "x11";
+
+    // Remove trailing newline characters
+    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'), dpserver.end());
 
     std::string errstr = "command not found";
     std::string cbdata;
-    if (dpserver.compare(wayland)){
+    if (dpserver == wayland){
         cbdata += dopopen("wl-paste");
         if (cbdata.find(errstr) != std::string::npos){
             std::cerr << "wl-paste not found" << std::endl;
             syslog(LOG_INFO, "%s", "wl-paste not found");
         }
     }// checks if xclip works then xsel
-    else if (dpserver.compare(x11)){
+    else if (dpserver == x11){
         cbdata += dopopen("xclip -o");
     
         if (cbdata.find(errstr) != std::string::npos) {
