@@ -247,17 +247,16 @@ int main(void)
     std::string cbdata;
     if (dpserver == wayland){
         cbdata += dopopen("wl-paste");
+        std::cout << "wayland";
         if (cbdata.find(errstr) != std::string::npos){
             std::cerr << "wl-paste not found" << std::endl;
-            syslog(LOG_INFO, "%s", "wl-paste not found");
         }
-    }// checks if xclip works then xsel
+    }
     else if (dpserver == x11){
         cbdata += dopopen("xclip -o");
-    
+        std::cout << "x11";
         if (cbdata.find(errstr) != std::string::npos) {
-            // Log the error to journalctl
-            syslog(LOG_INFO, "%s", "xclip not found or error");
+
             std::cerr << "xclip not found or error" << std::endl;  
         }
     } else {
