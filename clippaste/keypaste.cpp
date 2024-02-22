@@ -234,14 +234,16 @@ int main(void)
     std::string wayland = "wayland";
     std::string x11 = "x11";
 
-    printInts(wayland);
-    printInts(x11);
-    printInts(dpserver);
-
     // Remove trailing newline characters
     std::regex newlines_re("[\n\r]+");
 
     auto result = std::regex_replace(dpserver, newlines_re, "");
+
+    printInts(wayland);
+    printInts(x11);
+    printInts(dpserver);
+
+    
 
     std::string errstr = "command not found";
     std::string cbdata;
