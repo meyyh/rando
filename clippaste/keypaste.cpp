@@ -193,6 +193,11 @@ std::string dopopen(std::string command)
     }
 }
 
+void handle_error(const char* operation) {
+    std::cerr << "Error during " << operation << ": " << strerror(errno) << std::endl;
+    exit(EXIT_FAILURE);
+}
+
 int main(void)
 {
     //get display server
@@ -201,9 +206,11 @@ int main(void)
     struct uinput_setup usetup;
 
     int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    if (!fd) {std::cout << "fd errors\n";}
 
-    ioctl(fd, UI_SET_EVBIT, EV_KEY);
-   
+    int ioctl_status = ioctl(fd, UI_SET_EVBIT, EV_KEY);
+    if (ioctl_status == -1){perror("ioctl error"); close(fd);return EXIT_FAILURE;}
+
     //loop through the keys we want to use idk why it does not work without this
     for (int i = 0; i < numKeys; ++i) {
         int code = KEY_ESC + i;
@@ -217,8 +224,10 @@ int main(void)
     usetup.id.product = 0x420;
    
 
-    ioctl(fd, UI_DEV_SETUP, &usetup);
-    ioctl(fd, UI_DEV_CREATE);
+    ioctl_status = ioctl(fd, UI_DEV_SETUP, &usetup);
+    if (ioctl_status == -1){perror("ioctl error"); close(fd);return EXIT_FAILURE;}
+    ioctl_status = ioctl(fd, UI_DEV_CREATE);
+    if (ioctl_status == -1){perror("ioctl error"); close(fd);return EXIT_FAILURE;}
 
     sleep(1);
 
