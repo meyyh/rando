@@ -222,19 +222,29 @@ int main(void)
             syslog(LOG_INFO, "%s", "wl-paste not found");
         }
     }// checks if xclip works then xsel
-    else if (dpserver == "x11"){
-        cbdata += dopopen("xclip -selection clipboard -o");
-        if (cbdata.find(errstr) != std::string::npos){
-            syslog(LOG_INFO, "%s", "xclip not found");
-            cbdata += dopopen("xsel --clipboard");
-            if (cbdata.find(errstr) != std::string::npos){
-                syslog(LOG_INFO, "%s", "xsel not found");
-                std::cerr << "xsel and xclip not found" << std::endl;
-            }
+    else if (dpserver == "x11")
+    {
+    cbdata += dopopen("xclip -selection clipboard -o");
+    
+    if (cbdata.find(errstr) != std::string::npos) {
+        syslog(LOG_INFO, "%s", "xclip not found or error");
+        
+        // Log the error to journalctl
+        std::cerr << "xclip not found or error" << std::endl;
+        
+        // Try xsel if xclip fails
+        cbdata += dopopen("xsel --clipboard");
+        
+        if (cbdata.find(errstr) != std::string::npos) {
+            syslog(LOG_INFO, "%s", "xsel not found or error");
+            
+            // Log the error to journalctl
+            std::cerr << "xsel not found or error" << std::endl;
         }
     }
+}
 
-    for (size_t i = 0; i < cbdata.length() - 1; i++) {
+    for (size_t i = 0; i < cbdata.length(); i++) {
 
         int code = char_to_keycode(cbdata[i]);
         std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
@@ -242,8 +252,6 @@ int main(void)
         if (shift_chars.find(cbdata[i]) != std::string::npos) {
             //if not lowercase
 
-            //std::cout << "char not lower: " << cbdata[i] << "\n";
-            //std::cout << "keycode not lower: " << code << "\n";
             //press
             emit(fd, EV_KEY, KEY_LEFTSHIFT, 1);
             emit(fd, EV_SYN, SYN_REPORT, 0);
@@ -273,7 +281,7 @@ int main(void)
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
     }
-    sleep(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     ioctl(fd, UI_DEV_DESTROY);
     close(fd);
