@@ -193,6 +193,12 @@ std::string dopopen(std::string command)
     }
 }
 
+void printInts(const std::string& str) {
+    for (char c : str) {
+        std::cout << static_cast<int>(c) << " ";
+    }
+    std::cout << std::endl;
+}
 
 
 int main(void)
@@ -227,6 +233,10 @@ int main(void)
     //for issues with string and char
     std::string wayland = "wayland";
     std::string x11 = "x11";
+
+    printInts(wayland);
+    printInts(x11);
+    printInts(dpserver);
 
     // Remove trailing newline characters
     std::regex newlines_re("\n+");
