@@ -228,7 +228,7 @@ int main(void)
     std::string x11 = "x11";
 
     // Remove trailing newline characters
-    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'), dpserver.end());
+    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'),dpserver.end());
 
     std::string errstr = "command not found";
     std::string cbdata;
