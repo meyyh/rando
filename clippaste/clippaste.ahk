@@ -1,12 +1,14 @@
+#Requires AutoHotkey >=2.0
+
 #Persistent
 return
 
 <!]:: ; Alt ]
-    SetTimer, TypeClipboard, 50
+    SetTimer, TypeClipboard, 300 ; in ms
 return
 
 TypeClipboard:
-    Clipboard := ClipboardAll
-    SendInput, %Clipboard%
+   ; SetWorkingDir A_InitialWorkingDir ; set path to dir the .ahk file is in
+    Run A_ScriptDir . "\" . clippaste.exe
     SetTimer, TypeClipboard, Off
 return
