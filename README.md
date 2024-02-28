@@ -5,4 +5,7 @@
 
 ## clippaste
 - clippaste.c & .ahk are for windows
-- keytype.cpp is for linux
+- keypaste.cpp is for linux
+
+- example hyprland bind
+  - bind = CTRL, bracketright, exec, /home/meyyh/gits/rando/clippaste/kppp /dev/input/by-path/platform-i8042-serio-0-event-kbd
