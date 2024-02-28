@@ -16,9 +16,9 @@
 #include <linux/input.h>
 #include <linux/uinput.h>
 
-//g++ -g keypaste.cpp -o kppp -Wall -Wextra -Wpedantic -Werror
+//g++ -g keypaste.cpp -o kppp -Wall -Wextra -Wpedantic -Werror -std=c++23
 
-std::string dpserver;
+std::string dpserver; // wayland or x11
 
 // based on the layout of the hp elitebook 840 G5
 const char *keys[] = {
@@ -34,110 +34,105 @@ const char *keys[] = {
     "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16","KEY_F17","KEY_F18","KEY_F19","KEY_F20","KEY_F21","KEY_F22","KEY_F23","KEY_F24"
 };//bottom 3 rows are just extras
 
-//https://github.com/malteskoruppa/linuxkb
+
+//yoinked form https://github.com/malteskoruppa/linuxkb
 // convert ASCII chars to key codes
-// atm we assume the keyboard layout to be "English (US, international with dead keys)" (in Ubuntu 13.04)
-// see http://dry.sailingissues.com/us-international-keyboard-layout.html
-// we then return the corresponding keycode according to <linux/input.h>
 short char_to_keycode(char c) {
 
   short keycode;
 
   switch(c) {
 
-  // these two are on many keyboard views on Android
-  case ' ': keycode = KEY_SPACE; break;
-  case '.': keycode = KEY_DOT; break;
+    // normal keyboard
+    case 'a': case 'A': keycode = KEY_A; break;
+    case 'b': case 'B': keycode = KEY_B; break;
+    case 'c': case 'C': keycode = KEY_C; break;
+    case 'd': case 'D': keycode = KEY_D; break;
+    case 'e': case 'E': keycode = KEY_E; break;
+    case 'f': case 'F': keycode = KEY_F; break;
+    case 'g': case 'G': keycode = KEY_G; break;
+    case 'h': case 'H': keycode = KEY_H; break;
+    case 'i': case 'I': keycode = KEY_I; break;
+    case 'j': case 'J': keycode = KEY_J; break;
+    case 'k': case 'K': keycode = KEY_K; break;
+    case 'l': case 'L': keycode = KEY_L; break;
+    case 'm': case 'M': keycode = KEY_M; break;
+    case 'n': case 'N': keycode = KEY_N; break;
+    case 'o': case 'O': keycode = KEY_O; break;
+    case 'p': case 'P': keycode = KEY_P; break;
+    case 'q': case 'Q': keycode = KEY_Q; break;
+    case 'r': case 'R': keycode = KEY_R; break;
+    case 's': case 'S': keycode = KEY_S; break;
+    case 't': case 'T': keycode = KEY_T; break;
+    case 'u': case 'U': keycode = KEY_U; break;
+    case 'v': case 'V': keycode = KEY_V; break;
+    case 'w': case 'W': keycode = KEY_W; break;
+    case 'x': case 'X': keycode = KEY_X; break;
+    case 'y': case 'Y': keycode = KEY_Y; break;
+    case 'z': case 'Z': keycode = KEY_Z; break;
 
-  // normal keyboard
-  case 'a': case 'A': keycode = KEY_A; break;
-  case 'b': case 'B': keycode = KEY_B; break;
-  case 'c': case 'C': keycode = KEY_C; break;
-  case 'd': case 'D': keycode = KEY_D; break;
-  case 'e': case 'E': keycode = KEY_E; break;
-  case 'f': case 'F': keycode = KEY_F; break;
-  case 'g': case 'G': keycode = KEY_G; break;
-  case 'h': case 'H': keycode = KEY_H; break;
-  case 'i': case 'I': keycode = KEY_I; break;
-  case 'j': case 'J': keycode = KEY_J; break;
-  case 'k': case 'K': keycode = KEY_K; break;
-  case 'l': case 'L': keycode = KEY_L; break;
-  case 'm': case 'M': keycode = KEY_M; break;
-  case 'n': case 'N': keycode = KEY_N; break;
-  case 'o': case 'O': keycode = KEY_O; break;
-  case 'p': case 'P': keycode = KEY_P; break;
-  case 'q': case 'Q': keycode = KEY_Q; break;
-  case 'r': case 'R': keycode = KEY_R; break;
-  case 's': case 'S': keycode = KEY_S; break;
-  case 't': case 'T': keycode = KEY_T; break;
-  case 'u': case 'U': keycode = KEY_U; break;
-  case 'v': case 'V': keycode = KEY_V; break;
-  case 'w': case 'W': keycode = KEY_W; break;
-  case 'x': case 'X': keycode = KEY_X; break;
-  case 'y': case 'Y': keycode = KEY_Y; break;
-  case 'z': case 'Z': keycode = KEY_Z; break;
 
-  // special chars on Android keyboard, page 1
-  case '1': keycode = KEY_1; break;
-  case '2': keycode = KEY_2; break;
-  case '3': keycode = KEY_3; break;
-  case '4': keycode = KEY_4; break;
-  case '5': keycode = KEY_5; break;
-  case '6': keycode = KEY_6; break;
-  case '7': keycode = KEY_7; break;
-  case '8': keycode = KEY_8; break;
-  case '9': keycode = KEY_9; break;
-  case '0': keycode = KEY_0; break;
+    case '1': keycode = KEY_1; break;
+    case '2': keycode = KEY_2; break;
+    case '3': keycode = KEY_3; break;
+    case '4': keycode = KEY_4; break;
+    case '5': keycode = KEY_5; break;
+    case '6': keycode = KEY_6; break;
+    case '7': keycode = KEY_7; break;
+    case '8': keycode = KEY_8; break;
+    case '9': keycode = KEY_9; break;
+    case '0': keycode = KEY_0; break;
 
-  case '@': keycode = KEY_2; break; // with SHIFT
-  case '#': keycode = KEY_3; break; // with SHIFT
-  //case '€': keycode = KEY_5; break; // with ALTGR; not ASCII
-  case '%': keycode = KEY_5; break; // with SHIFT
-  case '&': keycode = KEY_7; break; // with SHIFT
-  case '*': keycode = KEY_8; break; // with SHIFT; alternative is KEY_KPASTERISK
-  case '-': keycode = KEY_MINUS; break; // alternative is KEY_KPMINUS
-  case '+': keycode = KEY_EQUAL; break; // with SHIFT; alternative is KEY_KPPLUS
-  case '(': keycode = KEY_9; break; // with SHIFT
-  case ')': keycode = KEY_0; break; // with SHIFT
+    case '!': keycode = KEY_1; break; // with SHIFT
+    case '@': keycode = KEY_2; break; // with SHIFT
+    case '#': keycode = KEY_3; break; // with SHIFT
+    case '$': keycode = KEY_4; break; // with SHIFT
+    case '%': keycode = KEY_5; break; // with SHIFT
+    case '^': keycode = KEY_6; break; // with SHIFT
+    case '&': keycode = KEY_7; break; // with SHIFT
+    case '*': keycode = KEY_8; break; // with SHIFT
+    case '(': keycode = KEY_9; break; // with SHIFT
+    case ')': keycode = KEY_0; break; // with SHIFT
 
-  case '!': keycode = KEY_1; break; // with SHIFT
-  case '"': keycode = KEY_APOSTROPHE; break; // with SHIFT, dead key
-  case '\'': keycode = KEY_APOSTROPHE; break; // dead key
-  case ':': keycode = KEY_SEMICOLON; break; // with SHIFT
-  case ';': keycode = KEY_SEMICOLON; break;
-  case '/': keycode = KEY_SLASH; break;
-  case '?': keycode = KEY_SLASH; break; // with SHIFT
+    case '-': keycode = KEY_MINUS; break;
+    case '_': keycode = KEY_MINUS; break; // with SHIFT
 
-  case ',': keycode = KEY_COMMA; break;
+    case '=': keycode = KEY_EQUAL; break;
+    case '+': keycode = KEY_EQUAL; break; // with SHIFT
 
-  case '~': keycode = KEY_GRAVE; break; // with SHIFT, dead key
-  case '`': keycode = KEY_GRAVE; break; // dead key
-  case '|': keycode = KEY_BACKSLASH; break; // with SHIFT
-  // missing because there's no ASCII code:  •, √, π, ÷, ×
-  case '{': keycode = KEY_LEFTBRACE; break; // with SHIFT
-  case '}': keycode = KEY_RIGHTBRACE; break; // with SHIFT
+    case '\'': keycode = KEY_APOSTROPHE; break; // \ used to escape ' 
+    case '"': keycode = KEY_APOSTROPHE; break; // with SHIFT
 
-  // note: TAB key is handled elsewhere
-  // missing because there's no ASCII code: £, ¥
-  case '$': keycode = KEY_4; break; // with SHIFT
-  // missing because there's no ASCII code: °
-  case '^': keycode = KEY_6; break; // with SHIFT, dead key
-  case '_': keycode = KEY_MINUS; break; // with SHIFT
-  case '=': keycode = KEY_EQUAL; break;
-  case '[': keycode = KEY_LEFTBRACE; break;
-  case ']': keycode = KEY_RIGHTBRACE; break;
+    case ';': keycode = KEY_SEMICOLON; break;
+    case ':': keycode = KEY_SEMICOLON; break; // with SHIFT
 
-  // missing because there's no ASCII code:  ™, ®, ©, ¶
-  case '\\': keycode = KEY_BACKSLASH; break;
-  case '<': keycode = KEY_COMMA; break; // with SHIFT
-  case '>': keycode = KEY_DOT; break; // with SHIFT
+    case '/': keycode = KEY_SLASH; break;
+    case '?': keycode = KEY_SLASH; break; // with SHIFT
 
-  // missing because there's no ASCII code:  „, …
+    case ',': keycode = KEY_COMMA; break;
+    case '<': keycode = KEY_COMMA; break; // with SHIFT
 
-  default: keycode = -1;
-  }
+    case ' ': keycode = KEY_SPACE; break;
 
-  return keycode;
+    case '.': keycode = KEY_DOT; break;
+    case '>': keycode = KEY_DOT; break; // with SHIFT
+
+    case '`': keycode = KEY_GRAVE; break;
+    case '~': keycode = KEY_GRAVE; break; // with SHIFT
+
+    case '[': keycode = KEY_LEFTBRACE; break;
+    case '{': keycode = KEY_LEFTBRACE; break; // with SHIFT
+
+    case ']': keycode = KEY_RIGHTBRACE; break;
+    case '}': keycode = KEY_RIGHTBRACE; break; // with SHIFT
+    
+    case '\\': keycode = KEY_BACKSLASH; break; // escape escape!
+    case '|': keycode = KEY_BACKSLASH; break; // with SHIFT
+
+    default: keycode = -1;
+    }
+
+    return keycode;
 }
 
 int numKeys = sizeof(keys) / sizeof(keys[0]);
@@ -149,9 +144,6 @@ void emit(int fd, int type, int code, int val)
    ie.type = type;
    ie.code = code;
    ie.value = val;
-   /* timestamp values below are ignored */
-   ie.time.tv_sec = 0;
-   ie.time.tv_usec = 0;
 
    write(fd, &ie, sizeof(ie));
 }
@@ -198,18 +190,22 @@ void handle_error(const char* operation) {
     exit(EXIT_FAILURE);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " /dev/input/by-path/*-event-kbd " << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    //use /dev/inout/by-path over direct event# because I think the event number can change
+    //but both will work
+    const char *inputDevicePath = argv[1]; 
+
     //get display server
     std::string dpserver = dopopen("echo $XDG_SESSION_TYPE");
 
-    struct uinput_setup usetup;
-
-    int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    int fd = open(inputDevicePath, O_WRONLY | O_NONBLOCK);
     if (!fd) {std::cout << "fd errors\n";}
-
-    int ioctl_status = ioctl(fd, UI_SET_EVBIT, EV_KEY);
-    if (ioctl_status == -1){perror("ioctl error"); close(fd);return EXIT_FAILURE;}
 
     //loop through the keys we want to use idk why it does not work without this
     for (int i = 0; i < numKeys; ++i) {
@@ -217,19 +213,7 @@ int main(void)
         ioctl(fd, UI_SET_KEYBIT, code);
     }
 
-    memset(&usetup, 0, sizeof(usetup));
-    strcpy(usetup.name, "key paste");
-    usetup.id.bustype = BUS_USB;
-    usetup.id.vendor = 0x69;
-    usetup.id.product = 0x420;
-   
-
-    ioctl_status = ioctl(fd, UI_DEV_SETUP, &usetup);
-    if (ioctl_status == -1){perror("ioctl error"); close(fd);return EXIT_FAILURE;}
-    ioctl_status = ioctl(fd, UI_DEV_CREATE);
-    if (ioctl_status == -1){perror("ioctl error"); close(fd);return EXIT_FAILURE;}
-
-    sleep(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); //only typing middle section of clipboard idk why without this
 
     //for issues with string and char
     std::string wayland = "wayland";
@@ -263,6 +247,8 @@ int main(void)
         int code = char_to_keycode(cbdata[i]);
         std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
 
+
+
         if (shift_chars.find(cbdata[i]) != std::string::npos) {
             //if not lowercase
 
@@ -277,6 +263,9 @@ int main(void)
             emit(fd, EV_SYN, SYN_REPORT, 0);
             emit(fd, EV_KEY, KEY_LEFTSHIFT, 0);
             emit(fd, EV_SYN, SYN_REPORT, 0);
+
+            fsync(fd);
+
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 
@@ -290,12 +279,15 @@ int main(void)
             //unpress
             emit(fd, EV_KEY, code, 0);
             emit(fd, EV_SYN, SYN_REPORT, 0);
+
+            fsync(fd);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    ioctl(fd, UI_DEV_DESTROY);
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
     close(fd);
    
     return 0;
