@@ -10,7 +10,7 @@
 - you need to be added to the input group then reboot
 
 - example hyprland bind
-  - bind = CTRL, bracketright, exec, /home/meyyh/gits/rando/clippaste/kppp /dev/input/by-path/platform-i8042-serio-0-event-kbd
+  - bind = CTRL, bracketright, exec, /home/meyyh/gits/rando/clippaste/kppp -d /dev/input/by-path/platform-i8042-serio-0-event-kbd
 
 ## brainfuck to string
 - read the header
