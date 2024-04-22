@@ -16,10 +16,6 @@
 #include <linux/input.h>
 #include <linux/uinput.h>
 
-//g++ -g keypaste.cpp -o kppp -Wall -Wextra -Wpedantic -Werror -std=c++23
-
-std::string dpserver; // wayland or x11
-
 // based on the layout of the hp elitebook 840 G5
 const char *keys[] = {
     "KEY_ESC", "KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4","KEY_F5","KEY_F6","KEY_F7","KEY_F8","KEY_F9","KEY_F10","KEY_F11","KEY_F12", "KEY_DELETE",
@@ -148,61 +144,78 @@ void emit(int fd, int type, int code, int val)
    write(fd, &ie, sizeof(ie));
 }
 
-std::string dopopen(std::string command)
+std::string getClipBoardData()
 {
-    std::array<char, 2048> buffer;
-    std::string result;
+    //x11 or wayland
+    std::string session_type = std::getenv("XDG_SESSION_TYPE");
 
-    FILE *pipe = popen(command.c_str(), "r");
-    if (!pipe)
-    {
-        std::cerr << "popen error with " << command << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    std::string cbData = "";
+    if (session_type == "wayland"){
+        FILE *pipe = popen("wl-paste", "r");
+        if (!pipe) {
+            std::cerr << "wl-paste error is it installed?\n";
+        }
 
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
-    {
-        result += buffer.data();
-    }
-
-    if (ferror(pipe))
-    {
-        std::cerr << "Error reading from pipe in dopopen." << std::endl;
+        std::array<char, 2048> buffer;
+        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+                cbData += buffer.data();
+        }
         pclose(pipe);
-        exit(EXIT_FAILURE);
     }
+    else if (session_type == "x11"){
+        FILE *pipe = popen("xclip -o", "r");
+        if (!pipe) {
+            std::cerr << "xclip error is it installed?\n";
+        }
 
-    int status = pclose(pipe);
-
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-    {
-        return result;
+        std::array<char, 2048> buffer;
+        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+                cbData += buffer.data();
+        }
+        pclose(pipe);
     }
-    else
-    {
-        std::cerr << "Command execution failed with exit status: " << WEXITSTATUS(status) << std::endl;
-        exit(EXIT_FAILURE);
+    else {
+        std::cerr << "unknow dpserver: " << session_type << "\n";
+        std::cerr << "expecting x11 or wayland \n";
     }
+    return cbData;
 }
 
-void handle_error(const char* operation) {
-    std::cerr << "Error during " << operation << ": " << strerror(errno) << std::endl;
-    exit(EXIT_FAILURE);
+void usage(int argc, char *argv[]){
+    std::cerr << "Usage: " << argv[0] << " -d /dev/input/by-path/*-event-kbd " << std::endl;
+    std::cerr << "options:" << std::endl;
+    std::cerr << "-d        path to input device(see usage above for example)" << std::endl;
+    std::cerr << "-n        removes newline characters" << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " /dev/input/by-path/*-event-kbd " << std::endl;
-        return EXIT_FAILURE;
+    //if false remove newline characters
+    bool useNewline = true;
+    const char *inputDevicePath = "";
+
+    for (int i = 0; i < argc; ++i) {
+        if(strcmp(argv[i], "-d") == 0)
+        {
+            int j = i + 1;
+            if(argv[j] == NULL){
+                
+                usage(argc, argv);
+                return 1;
+            }
+            inputDevicePath = argv[j];
+        } 
+        else if(argv[i] == "-n")
+        {
+            useNewline = false;
+        } 
+        else if(argv[i] == "-h" || argv[i] == "--help")
+        {
+            std::cout << "wut" << std::endl;
+            usage(argc, argv);
+            return 0;
+        }
     }
-
-    //use /dev/inout/by-path over direct event# because I think the event number can change
-    //but both will work
-    const char *inputDevicePath = argv[1]; 
-
-    //get display server
-    std::string dpserver = dopopen("echo $XDG_SESSION_TYPE");
 
     int fd = open(inputDevicePath, O_WRONLY | O_NONBLOCK);
     if (!fd) {std::cout << "fd errors\n";}
@@ -215,41 +228,14 @@ int main(int argc, char *argv[])
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); //only typing middle section of clipboard idk why without this
 
-    //for issues with string and char
-    std::string wayland = "wayland";
-    std::string x11 = "x11";
+    std::string cbData = getClipBoardData();
 
-    // Remove trailing newline characters
-    dpserver.erase(std::remove(dpserver.begin(), dpserver.end(), '\n'), dpserver.cend());  
+    for (size_t i = 0; i < cbData.length(); i++) {
 
-    std::string errstr = "command not found";
-    std::string cbdata;
-    if (dpserver == wayland){
-        cbdata += dopopen("wl-paste");
-
-        if (cbdata.find(errstr) != std::string::npos){
-            std::cerr << "wl-paste not found" << std::endl;
-        }
-    }
-    else if (dpserver == x11){
-        cbdata += dopopen("xclip -o");
-
-        if (cbdata.find(errstr) != std::string::npos) {
-            std::cerr << "xclip not found or error" << std::endl;  
-        }
-    }
-    else {
-        std::cout << "unknow dpserver: " << dpserver << "\n";
-    }
-
-    for (size_t i = 0; i < cbdata.length(); i++) {
-
-        int code = char_to_keycode(cbdata[i]);
+        short code = char_to_keycode(cbData[i]);
         std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
-
-
-
-        if (shift_chars.find(cbdata[i]) != std::string::npos) {
+        
+        if (shift_chars.find(cbData[i]) != std::string::npos) {
             //if not lowercase
 
             //press
@@ -268,7 +254,16 @@ int main(int argc, char *argv[])
 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
+        } else if (cbData[i] == '\n'){
+            emit(fd, EV_KEY, KEY_ENTER, 1);
+            emit(fd, EV_SYN, SYN_REPORT, 0);
 
+            emit(fd, EV_KEY, KEY_ENTER, 0);
+            emit(fd, EV_SYN, SYN_REPORT, 0);
+
+            fsync(fd);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } else {
             //if lowercase
             
@@ -283,7 +278,7 @@ int main(int argc, char *argv[])
             fsync(fd);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
-
+    
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -292,3 +287,4 @@ int main(int argc, char *argv[])
    
     return 0;
 }
+//g++ -g keypaste.cpp -o kppp -Wall -Wextra -Wpedantic -Werror -std=c++23
