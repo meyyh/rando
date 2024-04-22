@@ -151,7 +151,7 @@ std::string getClipBoardData()
 
     std::string cbData = "";
     if (session_type == "wayland"){
-        FILE *pipe = popen("wl-paste", "r");
+        FILE *pipe = popen("wl-paste -n", "r");
         if (!pipe) {
             std::cerr << "wl-paste error is it installed?\n";
         }
@@ -184,37 +184,50 @@ std::string getClipBoardData()
 void usage(int argc, char *argv[]){
     std::cerr << "Usage: " << argv[0] << " -d /dev/input/by-path/*-event-kbd " << std::endl;
     std::cerr << "options:" << std::endl;
-    std::cerr << "-d        path to input device(see usage above for example)" << std::endl;
+    std::cerr << "-d        [REQUIRED]path to input device(see usage above for example)" << std::endl;
     std::cerr << "-n        removes newline characters" << std::endl;
+    std::cerr << "-t        removes tab characters" << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
     //if false remove newline characters
     bool useNewline = true;
+    bool useTabs = true;
+    bool dpresent = false;
+    
     const char *inputDevicePath = "";
 
-    for (int i = 0; i < argc; ++i) {
+    for (int i = 0; i < argc; ++i){
         if(strcmp(argv[i], "-d") == 0)
         {
-            int j = i + 1;
-            if(argv[j] == NULL){
+            int IbuTonElargeR = i + 1;
+            if(argv[IbuTonElargeR] == NULL){
                 
                 usage(argc, argv);
                 return 1;
             }
-            inputDevicePath = argv[j];
+            inputDevicePath = argv[IbuTonElargeR];
+            dpresent = true;
         } 
-        else if(argv[i] == "-n")
+        else if(strcmp(argv[i], "-n") == 0)
         {
             useNewline = false;
-        } 
-        else if(argv[i] == "-h" || argv[i] == "--help")
+        }
+        else if(strcmp(argv[i], "-t") == 0)
         {
-            std::cout << "wut" << std::endl;
+            useTabs = false;
+        }
+        else if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
+        {
             usage(argc, argv);
             return 0;
         }
+    }
+
+    if(dpresent == false){
+        usage(argc, argv);
+        return 1;
     }
 
     int fd = open(inputDevicePath, O_WRONLY | O_NONBLOCK);
@@ -226,9 +239,16 @@ int main(int argc, char *argv[])
         ioctl(fd, UI_SET_KEYBIT, code);
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100)); //only typing middle section of clipboard idk why without this
+    //only typing middle section of clipboard idk why without this
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
 
     std::string cbData = getClipBoardData();
+
+    //most code editors auto indent when you press enter so if 
+    //you have tabs enabled it might add even more on top of that
+    if(useTabs == false){
+        cbData.erase(std::remove(cbData.begin(), cbData.end(), '\t'), cbData.end());
+    }
 
     for (size_t i = 0; i < cbData.length(); i++) {
 
@@ -255,15 +275,19 @@ int main(int argc, char *argv[])
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
         } else if (cbData[i] == '\n'){
-            emit(fd, EV_KEY, KEY_ENTER, 1);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
+            //without this it will skip newline characters
+            if(useNewline == true){
+                emit(fd, EV_KEY, KEY_ENTER, 1);
+                emit(fd, EV_SYN, SYN_REPORT, 0);
 
-            emit(fd, EV_KEY, KEY_ENTER, 0);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
+                emit(fd, EV_KEY, KEY_ENTER, 0);
+                emit(fd, EV_SYN, SYN_REPORT, 0);
 
-            fsync(fd);
+                fsync(fd);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
         } else {
             //if lowercase
             
