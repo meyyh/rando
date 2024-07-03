@@ -12,9 +12,12 @@
 #include <unistd.h>
 #include <iostream>
 #include <regex>
+#include <cjson/cJSON.h>
 
 #include <linux/input.h>
 #include <linux/uinput.h>
+
+#include "pstream.h"
 
 // based on the layout of the hp elitebook 840 G5
 const char *keys[] = {
@@ -189,47 +192,8 @@ void usage(int argc, char *argv[]){
     std::cerr << "-t        removes tab characters" << std::endl;
 }
 
-int main(int argc, char *argv[])
+void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
 {
-    //if false remove newline characters
-    bool useNewline = true;
-    bool useTabs = true;
-    bool dpresent = false;
-    
-    const char *inputDevicePath = "";
-
-    for (int i = 0; i < argc; ++i){
-        if(strcmp(argv[i], "-d") == 0)
-        {
-            int IbuTonElargeR = i + 1;
-            if(argv[IbuTonElargeR] == NULL){
-                
-                usage(argc, argv);
-                return 1;
-            }
-            inputDevicePath = argv[IbuTonElargeR];
-            dpresent = true;
-        } 
-        else if(strcmp(argv[i], "-n") == 0)
-        {
-            useNewline = false;
-        }
-        else if(strcmp(argv[i], "-t") == 0)
-        {
-            useTabs = false;
-        }
-        else if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
-        {
-            usage(argc, argv);
-            return 0;
-        }
-    }
-
-    if(dpresent == false){
-        usage(argc, argv);
-        return 1;
-    }
-
     int fd = open(inputDevicePath, O_WRONLY | O_NONBLOCK);
     if (!fd) {std::cout << "fd errors\n";}
 
@@ -242,21 +206,14 @@ int main(int argc, char *argv[])
     //only typing middle section of clipboard idk why without this
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
 
-    std::string cbData = getClipBoardData();
-
-    //most code editors auto indent when you press enter so if 
-    //you have tabs enabled it might add even more on top of that
-    if(useTabs == false){
-        cbData.erase(std::remove(cbData.begin(), cbData.end(), '\t'), cbData.end());
-    }
-
     for (size_t i = 0; i < cbData.length(); i++) {
 
         short code = char_to_keycode(cbData[i]);
         std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
         
-        if (shift_chars.find(cbData[i]) != std::string::npos) {
-            //if not lowercase
+        if (shift_chars.find(cbData[i]) != std::string::npos)
+        {
+            //if uppercase
 
             //press
             emit(fd, EV_KEY, KEY_LEFTSHIFT, 1);
@@ -274,7 +231,9 @@ int main(int argc, char *argv[])
 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        } else if (cbData[i] == '\n'){
+        } 
+        else if (cbData[i] == '\n')
+        {
             //without this it will skip newline characters
             if(useNewline == true){
                 emit(fd, EV_KEY, KEY_ENTER, 1);
@@ -288,7 +247,9 @@ int main(int argc, char *argv[])
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
 
-        } else {
+        } 
+        else
+        {
             //if lowercase
             
             //press
@@ -308,7 +269,145 @@ int main(int argc, char *argv[])
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     close(fd);
+}
+
+void toVm(std::string cbData, char *vmName)
+{
+    for (size_t i = 0; i < cbData.length(); i++)
+    {
+        std::string command = "virsh --connect qemu:///system send-key --codeset linux ";
+        command += vmName;
+
+        short code = char_to_keycode(cbData[i]);
+        std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
+
+        if (shift_chars.find(cbData[i]) != std::string::npos)
+        {
+            //if uppercase
+            command += " KEY_LEFTSHIFT";
+            command += " ";
+            command += std::to_string(code);
+        }
+        else if (cbData[i] == '\n')
+        {
+            command += " KEY_ENTER";
+        }
+        else
+        {
+            command += " ";
+            command += std::to_string(code);
+        }
+
+        FILE *fp;
+        char buffer[1024];
+    
+        fp = popen(command.c_str(), "r"); // Execute `ls -l` command and open pipe for reading
+    
+        if (fp == NULL) {
+            perror("popen");
+        }
+    
+        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            printf("%s", buffer); // Print each line of output
+        }
+    
+        pclose(fp); // Close the pipe
+    }
+    
+    
+}
+
+char *getVmName()
+{
+    //get the list of currently open windows in json format
+    redi::ipstream is("hyprctl clients -j");
+    std::string str;
+    std::string clients_str;
+    while (std::getline(is, str))
+    {
+        str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+        clients_str += str;
+    }
+    //std::cout << clients_str << std::endl;
+
+    cJSON *clients_json = cJSON_Parse(clients_str.c_str());
+    if(clients_json == NULL)
+    {
+        std::cerr << "error parsing json\n";
+        exit(EXIT_FAILURE);
+    }
+
+    //the json entry with focus id of 0 is the currently "selected" window
+    //if its title contains QEMU/KVM get the first word of the title which happens to be the vms name
+    cJSON *window = NULL;
+    cJSON_ArrayForEach(window, clients_json)
+    {
+        cJSON *focus_ID = cJSON_GetObjectItemCaseSensitive(window, "focusHistoryID");
+        if(focus_ID->valueint == 1)
+        {
+            cJSON *title = cJSON_GetObjectItemCaseSensitive(window, "title");
+            if(strstr(title->valuestring, "QEMU/KVM") != nullptr)
+            {
+                char *vm_name = strtok(title->valuestring, " ");
+                return vm_name;
+            }
+            else{return NULL;}
+        }
+    }
+
+    return NULL;
+}
+
+int main(int argc, char *argv[])
+{
+    //if false everything is on one line
+    bool useNewline = true;
+    bool dpresent = false;
+    bool isVM = false;
+    char *inputDevicePath;
+    char *vmName;
+
+    for (int i = 0; i < argc; ++i)
+    {
+        if(strcmp(argv[i], "-d") == 0)
+        {
+            int iPlusOne = i + 1;
+            if(argv[iPlusOne] == NULL)
+            {
+                usage(argc, argv);
+                return 1;
+            }
+            inputDevicePath = argv[iPlusOne];
+            dpresent = true;
+        } 
+        else if(strcmp(argv[i], "-n") == 0)
+        {
+            useNewline = false;
+        }
+        else if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
+        {
+            usage(argc, argv);
+            return 0;
+        }
+    }
+
+    if(dpresent == false){
+        usage(argc, argv);
+        return 1;
+    }
+
+
+    std::string cbData = getClipBoardData();
+
+    //return the name of the qemu/kvm vm if not a vm window returns null
+    vmName = getVmName();
+
+    if(vmName == NULL){
+        toKeyboard(cbData, inputDevicePath, useNewline);
+    }else{
+        toVm(cbData, vmName);
+    }
    
     return 0;
 }
-//g++ -g keypaste.cpp -o kppp -Wall -Wextra -Wpedantic -Werror -std=c++23
+//g++ -g keypaste.cpp -o kppp -lcjson -Wall -Wextra -Wpedantic  -std=c++23
