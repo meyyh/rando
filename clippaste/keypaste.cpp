@@ -1,26 +1,17 @@
-#include <array> //used for buffer
-#include <fcntl.h> //open fd things
-
-#include <chrono>//time in
-#include <thread>// ms
-
-#include <syslog.h>
-
-//#include <stdio.h>
-#include <stdlib.h>
+#include <array>
+#include <fcntl.h>
+#include <chrono>
+#include <thread>
+#include <cstdlib>
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
-#include <regex>
 #include <cjson/cJSON.h>
-
 #include <linux/input.h>
 #include <linux/uinput.h>
 #include <libvirt/libvirt.h>
 
 #include "pstream.h"
-#include <hyprlang.hpp>
-
 
 std::array keys = {
     "KEY_ESC", "KEY_DELETE", "KEY_HOME", "KEY_BACKSPACE", "KEY_TAB",  "KEY_PAGEDOWN", "KEY_ENTER", "KEY_PAGEUP", "KEY_CAPSLOCK", "KEY_LEFTSHIFT", "KEY_MENU",
@@ -130,6 +121,8 @@ short charToKeycode(char c)
     case '\\': keycode = KEY_BACKSLASH; break; // escape escape!
     case '|': keycode = KEY_BACKSLASH; break; // with SHIFT
 
+    case '\n': keycode = KEY_ENTER; break;
+
     default: keycode = -1;
     }
 
@@ -140,21 +133,25 @@ short charToKeycode(char c)
 
 void emit(int fd, int type, int code, int val)
 {
-   struct input_event ie;
+    struct input_event ie;
+    ie.type = type;
+    ie.code = code;
+    ie.value = val;
 
-   ie.type = type;
-   ie.code = code;
-   ie.value = val;
+    struct input_event report;
+    report.type = EV_SYN;
+    report.code = SYN_REPORT;
+    report.value = 0;
 
-   write(fd, &ie, sizeof(ie));
+    write(fd, &ie, sizeof(ie));
+    write(fd, &report, sizeof(report));
 }
 
-std::string getClipBoardData()
+std::string getClipBoardData(bool useNewLine)
 {
     //should return x11 or wayland
     std::string session_type = std::getenv("XDG_SESSION_TYPE");
     std::string getCbData = (session_type == "wayland") ? "wl-paste -n" : (session_type == "x11") ? "xclip -o" : "";
-    std::string cbData;
 
     if (getCbData.empty())
     {
@@ -163,32 +160,27 @@ std::string getClipBoardData()
         return "";
     }
 
-    FILE *pipe = popen(getCbData.c_str(), "r");
-    if (!pipe)
+    redi::ipstream inStream(getCbData);
+
+    std::string cbData(std::istreambuf_iterator<char>(inStream), {});
+
+    if(useNewLine == false)
     {
-        std::cerr << (session_type == "wayland") ? "wl-paste error: is it installed?\n" : "xclip error: is it installed?\n";
-        return "";
+        cbData.erase(std::remove(cbData.begin(), cbData.end(), '\n'), cbData.end());
     }
 
-    std::array<char, 2048> buffer;
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
-    {
-        cbData += buffer.data();
-    }
-
-    pclose(pipe);
     return cbData;
 }
 
-void usage(int argc, char *argv[])
+void usage(char *argv[])
 {
     std::cerr << "Usage: " << argv[0] << " -d /dev/input/by-path/*-event-kbd " << std::endl;
     std::cerr << "options:" << std::endl;
-    std::cerr << "-d        [REQUIRED]path to input device(see usage above for example)" << std::endl;
+    std::cerr << "-d        path to input device(see usage above for example)" << std::endl;
     std::cerr << "-n        removes newline characters" << std::endl;
 }
 
-void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
+void toKeyboard(std::string cbData, char *inputDevicePath)
 {
     int fd = open(inputDevicePath, O_WRONLY | O_NONBLOCK);
     if (fd < 0)
@@ -215,52 +207,25 @@ void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
         std::string shiftChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
         
         if (shiftChars.find(cbData[i]) != std::string::npos)
-        {
-            //if uppercase
-
+        {   //if uppercase
             //press
             emit(fd, EV_KEY, KEY_LEFTSHIFT, 1);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
             emit(fd, EV_KEY, code, 1);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
 
             //unpress
             emit(fd, EV_KEY, code, 0);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
             emit(fd, EV_KEY, KEY_LEFTSHIFT, 0);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
 
             fsync(fd);
-
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
-        else if (cbData[i] == '\n')
-        {
-            //without this it will skip newline characters
-            if(useNewline == true){
-                emit(fd, EV_KEY, KEY_ENTER, 1);
-                emit(fd, EV_SYN, SYN_REPORT, 0);
-
-                emit(fd, EV_KEY, KEY_ENTER, 0);
-                emit(fd, EV_SYN, SYN_REPORT, 0);
-
-                fsync(fd);
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-
-        } 
         else
-        {
-            //if lowercase
-            
+        {   //if lowercase
             //press
             emit(fd, EV_KEY, code, 1);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
 
             //unpress
             emit(fd, EV_KEY, code, 0);
-            emit(fd, EV_SYN, SYN_REPORT, 0);
 
             fsync(fd);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -273,7 +238,7 @@ void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
     close(fd);
 }
 
-void toVm(std::string cbData, std::string vmName, virDomainPtr libvirtDomain)
+void toVm(std::string cbData, virDomainPtr libvirtDomain)
 {
     for (size_t i = 0; i < cbData.length(); i++)
     {
@@ -283,21 +248,19 @@ void toVm(std::string cbData, std::string vmName, virDomainPtr libvirtDomain)
         if (shiftChars.find(cbData[i]) != std::string::npos)
         {
             //if uppercase
-            unsigned int keycodes[] = { KEY_LEFTSHIFT, code };
+            unsigned int keycodes[] = { KEY_LEFTSHIFT, static_cast<unsigned int>(code) };
             virDomainSendKey(libvirtDomain, VIR_KEYCODE_SET_LINUX, 0, keycodes, 2, 0);
-        }
-        else if (cbData[i] == '\n')
-        {
-            unsigned int keycodes[] = { KEY_ENTER };
-            virDomainSendKey(libvirtDomain, VIR_KEYCODE_SET_LINUX, 0, keycodes, 1, 0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         else
         {
-            unsigned int keycodes[] = { code };
+            unsigned int keycodes[] = { static_cast<unsigned int>(code) };
             virDomainSendKey(libvirtDomain, VIR_KEYCODE_SET_LINUX, 0, keycodes, 1, 0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
     }
 }
+
 
 std::string getVmName()
 {
@@ -340,64 +303,55 @@ std::string getVmName()
     return "";
 }
 
+
 int main(int argc, char *argv[])
 {
     //if false everything is on one line
     bool useNewline = true;
     bool dpresent = false;
-    bool isVM = false;
-    char *inputDevicePath;
+    char *inputDevicePath = NULL;
     std::string vmName;
 
-    for (int i = 0; i < argc; ++i)
-    {
-        if(strcmp(argv[i], "-d") == 0)
-        {
-            int iPlusOne = i + 1;
-            if(argv[iPlusOne] == NULL)
-            {
-                usage(argc, argv);
-                return 1;
-            }
-            inputDevicePath = argv[iPlusOne];
-            dpresent = true;
-        } 
-        else if(strcmp(argv[i], "-n") == 0)
-        {
-            useNewline = false;
-        }
-        else if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
-        {
-            usage(argc, argv);
-            return 0;
+    int opt;
+    while ((opt = getopt(argc, argv, "d:nh")) != -1) {
+        switch (opt) {
+            case 'd':
+                inputDevicePath = optarg;
+                dpresent = true;
+                break;
+            case 'n':
+                useNewline = false;
+                break;
+            case 'h':
+            default:
+                usage(argv);
+                return 0;
         }
     }
 
     if(dpresent == false)
     {
-        usage(argc, argv);
+        usage(argv);
         return 1;
     }
 
 
-    std::string cbData = getClipBoardData();
+    std::string cbData = getClipBoardData(useNewline);
 
-    //return the name of the qemu/kvm vm if not a vm window returns null
+    //return the name of the qemu/kvm vm if not a vm window returns empty string
     vmName = getVmName();
-
-    
 
     if(vmName == "")
     {
-        toKeyboard(cbData, inputDevicePath, useNewline);
+        toKeyboard(cbData, inputDevicePath);
     }
     else
     {
         virConnectPtr libvirtConn = virConnectOpen("qemu:///system");
         virDomainPtr libvirtDomain = virDomainLookupByName(libvirtConn, vmName.c_str());
-        toVm(cbData, vmName, libvirtDomain);
+        toVm(cbData, libvirtDomain);
     }
    
     return 0;
 }
-//g++ -g keypaste.cpp -o kppp -lcjson -lvert -Wall -Wextra -Wpedantic -std=c++23
+//g++ -g keypaste.cpp -o kppp -lcjson -lvert -Wall -Wextra -Wpedantic -std=c++17
