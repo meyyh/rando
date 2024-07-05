@@ -4,9 +4,9 @@
 #include <chrono>//time in
 #include <thread>// ms
 
-#include <syslog.h> //log to journal
+#include <syslog.h>
 
-#include <stdio.h>
+//#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -16,33 +16,35 @@
 
 #include <linux/input.h>
 #include <linux/uinput.h>
+#include <libvirt/libvirt.h>
 
 #include "pstream.h"
+#include <hyprlang.hpp>
 
-// based on the layout of the hp elitebook 840 G5
-const char *keys[] = {
-    "KEY_ESC", "KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4","KEY_F5","KEY_F6","KEY_F7","KEY_F8","KEY_F9","KEY_F10","KEY_F11","KEY_F12", "KEY_DELETE",
-    "KEY_GRAVE", "KEY_1", "KEY_2", "KEY_3", "KEY_4", "KEY_5", "KEY_6", "KEY_7", "KEY_8", "KEY_9", "KEY_0", "KEY_MINUS", "KEY_EQUAL","KEY_BACKSPACE", "KEY_HOME",
-    "KEY_TAB", "KEY_Q", "KEY_W", "KEY_E", "KEY_R", "KEY_T", "KEY_Y", "KEY_U", "KEY_I", "KEY_O", "KEY_P", "KEY_LEFTBRACE", "KEY_RIGHTBRACE", "KEY_BACKSLASH", "KEY_PAGEUP",
-    "KEY_CAPSLOCK", "KEY_A", "KEY_S", "KEY_D", "KEY_F", "KEY_G", "KEY_H", "KEY_J", "KEY_K", "KEY_L", "KEY_SEMICOLON", "KEY_APOSTROPHE", "KEY_ENTER", "KEY_PAGEDOWN",
-    "KEY_LEFTSHIFT", "KEY_Z", "KEY_X", "KEY_C", "KEY_V", "KEY_B", "KEY_N", "KEY_M", "KEY_COMMA", "KEY_DOT", "KEY_SLASH", "KEY_RIGHTSHIFT", "KEY_END",
-    "KEY_LEFTCTRL", "KEY_FN", "KEY_LEFTMETA", "KEY_LEFTALT", "KEY_SPACE", "KEY_RIGHTALT", "KEY_MENU", "KEY_RIGHTCTRL", "KEY_LEFT", "KEY_UP", "KEY_DOWN", "KEY_RIGHT",
+
+std::array keys = {
+    "KEY_ESC", "KEY_DELETE", "KEY_HOME", "KEY_BACKSPACE", "KEY_TAB",  "KEY_PAGEDOWN", "KEY_ENTER", "KEY_PAGEUP", "KEY_CAPSLOCK", "KEY_LEFTSHIFT", "KEY_MENU",
+    "KEY_LEFTCTRL", "KEY_FN", "KEY_LEFTMETA", "KEY_LEFTALT", "KEY_SPACE", "KEY_RIGHTALT",  "KEY_RIGHTCTRL", "KEY_LEFT", "KEY_UP", "KEY_DOWN", "KEY_RIGHT", "KEY_RIGHTSHIFT", "KEY_END",
+    "KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4", "KEY_F5", "KEY_F6", "KEY_F7", "KEY_F8", "KEY_F9", "KEY_F10", "KEY_F11", "KEY_F12", 
+    "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16", "KEY_F17", "KEY_F18", "KEY_F19", "KEY_F20", "KEY_F21", "KEY_F22", "KEY_F23", "KEY_F24",
+    "KEY_1", "KEY_2", "KEY_3", "KEY_4", "KEY_5", "KEY_6", "KEY_7", "KEY_8", "KEY_9", "KEY_0", 
+    "KEY_GRAVE", "KEY_MINUS", "KEY_EQUAL", "KEY_LEFTBRACE", "KEY_RIGHTBRACE", "KEY_BACKSLASH", "KEY_SEMICOLON", "KEY_APOSTROPHE",
+    "KEY_Q", "KEY_W", "KEY_E", "KEY_R", "KEY_T", "KEY_Y", "KEY_U", "KEY_I", "KEY_O", "KEY_P",  
+    "KEY_A", "KEY_S", "KEY_D", "KEY_F", "KEY_G", "KEY_H", "KEY_J", "KEY_K", "KEY_L", 
+    "KEY_Z", "KEY_X", "KEY_C", "KEY_V", "KEY_B", "KEY_N", "KEY_M", "KEY_COMMA", "KEY_DOT", "KEY_SLASH",
     
     "KEY_PLAYPAUSE", "KEY_VOLUMEUP", "KEY_VOLUMEDOWN", "KEY_MUTE", "KEY_NEXTSONG", "KEY_PREVIOUSSONG",
-    "KEY_UNDO", "KEY_SCROLLLOCK", "KEY_INSERT", "KEY_EJECTCD", "KEY_FORWARD", "KEY_BACK",
-    "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16","KEY_F17","KEY_F18","KEY_F19","KEY_F20","KEY_F21","KEY_F22","KEY_F23","KEY_F24"
-};//bottom 3 rows are just extras
-
+    "KEY_UNDO", "KEY_SCROLLLOCK", "KEY_INSERT", "KEY_EJECTCD", "KEY_FORWARD", "KEY_BACK"
+};
 
 //yoinked form https://github.com/malteskoruppa/linuxkb
 // convert ASCII chars to key codes
-short char_to_keycode(char c) {
-
+short charToKeycode(char c)
+{
   short keycode;
 
   switch(c) {
 
-    // normal keyboard
     case 'a': case 'A': keycode = KEY_A; break;
     case 'b': case 'B': keycode = KEY_B; break;
     case 'c': case 'C': keycode = KEY_C; break;
@@ -99,7 +101,7 @@ short char_to_keycode(char c) {
     case '=': keycode = KEY_EQUAL; break;
     case '+': keycode = KEY_EQUAL; break; // with SHIFT
 
-    case '\'': keycode = KEY_APOSTROPHE; break; // \ used to escape ' 
+    case '\'': keycode = KEY_APOSTROPHE; break; 
     case '"': keycode = KEY_APOSTROPHE; break; // with SHIFT
 
     case ';': keycode = KEY_SEMICOLON; break;
@@ -134,7 +136,7 @@ short char_to_keycode(char c) {
     return keycode;
 }
 
-int numKeys = sizeof(keys) / sizeof(keys[0]);
+
 
 void emit(int fd, int type, int code, int val)
 {
@@ -149,69 +151,70 @@ void emit(int fd, int type, int code, int val)
 
 std::string getClipBoardData()
 {
-    //x11 or wayland
+    //should return x11 or wayland
     std::string session_type = std::getenv("XDG_SESSION_TYPE");
+    std::string getCbData = (session_type == "wayland") ? "wl-paste -n" : (session_type == "x11") ? "xclip -o" : "";
+    std::string cbData;
 
-    std::string cbData = "";
-    if (session_type == "wayland"){
-        FILE *pipe = popen("wl-paste -n", "r");
-        if (!pipe) {
-            std::cerr << "wl-paste error is it installed?\n";
-        }
+    if (getCbData.empty())
+    {
+        std::cerr << "Unknown dpserver: " << session_type << "\n";
+        std::cerr << "Expecting x11 or wayland\n";
+        return "";
+    }
 
-        std::array<char, 2048> buffer;
-        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-                cbData += buffer.data();
-        }
-        pclose(pipe);
+    FILE *pipe = popen(getCbData.c_str(), "r");
+    if (!pipe)
+    {
+        std::cerr << (session_type == "wayland") ? "wl-paste error: is it installed?\n" : "xclip error: is it installed?\n";
+        return "";
     }
-    else if (session_type == "x11"){
-        FILE *pipe = popen("xclip -o", "r");
-        if (!pipe) {
-            std::cerr << "xclip error is it installed?\n";
-        }
 
-        std::array<char, 2048> buffer;
-        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-                cbData += buffer.data();
-        }
-        pclose(pipe);
+    std::array<char, 2048> buffer;
+    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+    {
+        cbData += buffer.data();
     }
-    else {
-        std::cerr << "unknow dpserver: " << session_type << "\n";
-        std::cerr << "expecting x11 or wayland \n";
-    }
+
+    pclose(pipe);
     return cbData;
 }
 
-void usage(int argc, char *argv[]){
+void usage(int argc, char *argv[])
+{
     std::cerr << "Usage: " << argv[0] << " -d /dev/input/by-path/*-event-kbd " << std::endl;
     std::cerr << "options:" << std::endl;
     std::cerr << "-d        [REQUIRED]path to input device(see usage above for example)" << std::endl;
     std::cerr << "-n        removes newline characters" << std::endl;
-    std::cerr << "-t        removes tab characters" << std::endl;
 }
 
 void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
 {
     int fd = open(inputDevicePath, O_WRONLY | O_NONBLOCK);
-    if (!fd) {std::cout << "fd errors\n";}
+    if (fd < 0)
+    {
+        std::cout << "fd errors\n";
+        return;
+    }
 
-    //loop through the keys we want to use idk why it does not work without this
-    for (int i = 0; i < numKeys; ++i) {
+    int numKeys = sizeof(keys) / sizeof(keys[0]);
+
+    //loop through the keys we want to use. this is required
+    for (int i = 0; i < numKeys; ++i)
+    {
         int code = KEY_ESC + i;
         ioctl(fd, UI_SET_KEYBIT, code);
     }
 
-    //only typing middle section of clipboard idk why without this
+    //only typing middle section of clipboard without this, idk why
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
 
-    for (size_t i = 0; i < cbData.length(); i++) {
-
-        short code = char_to_keycode(cbData[i]);
-        std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
+    for (size_t i = 0; i < cbData.length(); i++)
+    {
+        short code = charToKeycode(cbData[i]);
+        std::string shiftChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
         
-        if (shift_chars.find(cbData[i]) != std::string::npos)
+        if (shiftChars.find(cbData[i]) != std::string::npos)
         {
             //if uppercase
 
@@ -230,7 +233,6 @@ void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
             fsync(fd);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
         } 
         else if (cbData[i] == '\n')
         {
@@ -271,73 +273,53 @@ void toKeyboard(std::string cbData, char *inputDevicePath, bool useNewline)
     close(fd);
 }
 
-void toVm(std::string cbData, char *vmName)
+void toVm(std::string cbData, std::string vmName, virDomainPtr libvirtDomain)
 {
     for (size_t i = 0; i < cbData.length(); i++)
     {
-        std::string command = "virsh --connect qemu:///system send-key --codeset linux ";
-        command += vmName;
+        short code = charToKeycode(cbData[i]);
+        std::string shiftChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
 
-        short code = char_to_keycode(cbData[i]);
-        std::string shift_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
-
-        if (shift_chars.find(cbData[i]) != std::string::npos)
+        if (shiftChars.find(cbData[i]) != std::string::npos)
         {
             //if uppercase
-            command += " KEY_LEFTSHIFT";
-            command += " ";
-            command += std::to_string(code);
+            unsigned int keycodes[] = { KEY_LEFTSHIFT, code };
+            virDomainSendKey(libvirtDomain, VIR_KEYCODE_SET_LINUX, 0, keycodes, 2, 0);
         }
         else if (cbData[i] == '\n')
         {
-            command += " KEY_ENTER";
+            unsigned int keycodes[] = { KEY_ENTER };
+            virDomainSendKey(libvirtDomain, VIR_KEYCODE_SET_LINUX, 0, keycodes, 1, 0);
         }
         else
         {
-            command += " ";
-            command += std::to_string(code);
-        }
-
-        FILE *fp;
-        char buffer[1024];
-    
-        fp = popen(command.c_str(), "r"); // Execute `ls -l` command and open pipe for reading
-    
-        if (fp == NULL) {
-            perror("popen");
-        }
-    
-        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-            printf("%s", buffer); // Print each line of output
-        }
-    
-        pclose(fp); // Close the pipe
+            unsigned int keycodes[] = { code };
+            virDomainSendKey(libvirtDomain, VIR_KEYCODE_SET_LINUX, 0, keycodes, 1, 0);
+        } 
     }
-    
-    
 }
 
-char *getVmName()
+std::string getVmName()
 {
-    //get the list of currently open windows in json format
-    redi::ipstream is("hyprctl clients -j");
+    //get the list of currently open hyprland windows in json format
+    redi::ipstream inStream("hyprctl clients -j");
     std::string str;
-    std::string clients_str;
-    while (std::getline(is, str))
+    std::string hyprlandClients;
+    while (std::getline(inStream, str))
     {
         str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
-        clients_str += str;
+        hyprlandClients += str;
     }
-    //std::cout << clients_str << std::endl;
 
-    cJSON *clients_json = cJSON_Parse(clients_str.c_str());
+
+    cJSON *clients_json = cJSON_Parse(hyprlandClients.c_str());
     if(clients_json == NULL)
     {
         std::cerr << "error parsing json\n";
         exit(EXIT_FAILURE);
     }
 
-    //the json entry with focus id of 0 is the currently "selected" window
+    //look for the json entry with focus_id of 1 this will be the previously "selected" window
     //if its title contains QEMU/KVM get the first word of the title which happens to be the vms name
     cJSON *window = NULL;
     cJSON_ArrayForEach(window, clients_json)
@@ -348,14 +330,14 @@ char *getVmName()
             cJSON *title = cJSON_GetObjectItemCaseSensitive(window, "title");
             if(strstr(title->valuestring, "QEMU/KVM") != nullptr)
             {
-                char *vm_name = strtok(title->valuestring, " ");
+                //returns the first "word" by getting all chars before it finds a space
+                std::string vm_name = strtok(title->valuestring, " ");
                 return vm_name;
             }
-            else{return NULL;}
+            else{return "";}
         }
     }
-
-    return NULL;
+    return "";
 }
 
 int main(int argc, char *argv[])
@@ -365,7 +347,7 @@ int main(int argc, char *argv[])
     bool dpresent = false;
     bool isVM = false;
     char *inputDevicePath;
-    char *vmName;
+    std::string vmName;
 
     for (int i = 0; i < argc; ++i)
     {
@@ -391,7 +373,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(dpresent == false){
+    if(dpresent == false)
+    {
         usage(argc, argv);
         return 1;
     }
@@ -402,12 +385,19 @@ int main(int argc, char *argv[])
     //return the name of the qemu/kvm vm if not a vm window returns null
     vmName = getVmName();
 
-    if(vmName == NULL){
+    
+
+    if(vmName == "")
+    {
         toKeyboard(cbData, inputDevicePath, useNewline);
-    }else{
-        toVm(cbData, vmName);
+    }
+    else
+    {
+        virConnectPtr libvirtConn = virConnectOpen("qemu:///system");
+        virDomainPtr libvirtDomain = virDomainLookupByName(libvirtConn, vmName.c_str());
+        toVm(cbData, vmName, libvirtDomain);
     }
    
     return 0;
 }
-//g++ -g keypaste.cpp -o kppp -lcjson -Wall -Wextra -Wpedantic  -std=c++23
+//g++ -g keypaste.cpp -o kppp -lcjson -lvert -Wall -Wextra -Wpedantic -std=c++23
