@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <string.h>
 #include <unistd.h>
+#include <stddef.h>
 #include <iostream>
 #include <cjson/cJSON.h>
 #include <linux/input.h>
@@ -12,6 +13,7 @@
 #include <libvirt/libvirt.h>
 
 #include "pstream.h"
+#include <cstddef>
 
 std::array keys = {
     "KEY_ESC", "KEY_DELETE", "KEY_HOME", "KEY_BACKSPACE", "KEY_TAB",  "KEY_PAGEDOWN", "KEY_ENTER", "KEY_PAGEUP", "KEY_CAPSLOCK", "KEY_LEFTSHIFT", "KEY_MENU",
@@ -129,8 +131,6 @@ short charToKeycode(char c)
     return keycode;
 }
 
-
-
 void emit(int fd, int type, int code, int val)
 {
     struct input_event ie;
@@ -201,7 +201,7 @@ void toKeyboard(std::string cbData, char *inputDevicePath)
     //only typing middle section of clipboard without this, idk why
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
 
-    for (size_t i = 0; i < cbData.length(); i++)
+    for (std::size_t i = 0; i < cbData.length(); i++)
     {
         short code = charToKeycode(cbData[i]);
         std::string shiftChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
@@ -230,7 +230,6 @@ void toKeyboard(std::string cbData, char *inputDevicePath)
             fsync(fd);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } 
-    
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -240,7 +239,7 @@ void toKeyboard(std::string cbData, char *inputDevicePath)
 
 void toVm(std::string cbData, virDomainPtr libvirtDomain)
 {
-    for (size_t i = 0; i < cbData.length(); i++)
+    for (std::size_t i = 0; i < cbData.length(); i++)
     {
         short code = charToKeycode(cbData[i]);
         std::string shiftChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#%&*+()!\":?~|{}$^_<>";
@@ -354,4 +353,4 @@ int main(int argc, char *argv[])
    
     return 0;
 }
-//g++ -g keypaste.cpp -o kppp -lcjson -lvert -Wall -Wextra -Wpedantic -std=c++17
+//g++ -g keypaste.cpp -o kppp -lcjson -lvirt -Wall -Wextra -Wpedantic -std=c++17
