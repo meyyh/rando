@@ -3,3 +3,5 @@
 
 # Ignore files with no extension
 *.
+
+*.exe
