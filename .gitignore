@@ -3,5 +3,10 @@
 
 # Ignore files with no extension
 *.
+# Ignore files with no extensions in folders
+*/.*
+
 
 *.exe
+
+.vscode\
