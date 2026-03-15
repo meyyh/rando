@@ -1,42 +1,58 @@
 #include <windows.h>
-#include <wchar.h>
-#include <locale.h>
 #include <stdio.h>
- 
+
+void send_key(WORD vk, DWORD flags)
+{
+    INPUT input = {0};
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = vk;
+    input.ki.dwFlags = flags;
+    SendInput(1, &input, sizeof(INPUT));
+}
+
 int main()
 {
-    setlocale(LC_ALL, ""); // Set the locale to the user's default
+    if (!OpenClipboard(NULL))
+        return 1;
 
-    OpenClipboard(NULL);
-    HANDLE hData = GetClipboardData(CF_TEXT);
+    if (!IsClipboardFormatAvailable(CF_UNICODETEXT))
+        return 1;
 
-    char* inputString = (char*)GlobalLock(hData);
+    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+    wchar_t *text = (wchar_t*)GlobalLock(hData);
 
-    // Create a keyboard event structure
-    INPUT ip;
-    ip.type = INPUT_KEYBOARD;
-    ip.ki.time = 0;
-    ip.ki.dwExtraInfo = 0;
+    if (!text)
+        return 1;
 
-    // 1 second delay to release any mod keys
+    // Give user time to focus target window
     Sleep(1000);
 
-    // Iterate through each character in the input string
-    for (int i = 0; inputString[i] != L'\0'; ++i) {
-        wchar_t wideChar;
-        
-        // Convert each character to its wide character (UTF-16)
-        mbtowc(&wideChar, &inputString[i], 1);
-        
-        // Press a Unicode "key"
-        ip.ki.dwFlags = KEYEVENTF_UNICODE;
-        ip.ki.wVk = 0;
-        ip.ki.wScan = wideChar;
-        SendInput(1, &ip, sizeof(INPUT));
- 
-        // Release key
-        ip.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-        SendInput(1, &ip, sizeof(INPUT));
+    for (int i = 0; text[i] != L'\0'; i++)
+    {
+        SHORT vk = VkKeyScanW(text[i]);
+
+        if (vk == -1)
+            continue;
+
+        BYTE vkCode = vk & 0xFF;
+        BYTE modifiers = (vk >> 8) & 0xFF;
+
+        // Press modifiers
+        if (modifiers & 1) send_key(VK_SHIFT, 0);
+        if (modifiers & 2) send_key(VK_CONTROL, 0);
+        if (modifiers & 4) send_key(VK_MENU, 0);
+
+        // Key down
+        send_key(vkCode, 0);
+
+        // Key up
+        send_key(vkCode, KEYEVENTF_KEYUP);
+
+        // Release modifiers
+        if (modifiers & 4) send_key(VK_MENU, KEYEVENTF_KEYUP);
+        if (modifiers & 2) send_key(VK_CONTROL, KEYEVENTF_KEYUP);
+        if (modifiers & 1) send_key(VK_SHIFT, KEYEVENTF_KEYUP);
+        Sleep(10);
     }
 
     GlobalUnlock(hData);
